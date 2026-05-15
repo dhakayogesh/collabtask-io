@@ -13,7 +13,7 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
-export const Route = createFileRoute("/_app/projects")({
+export const Route = createFileRoute("/_app/projects/")({
   component: Projects,
 });
 
