@@ -34,53 +34,69 @@ function AuthPage() {
   }, [user, loading, navigate]);
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-background">
+    <div className="min-h-screen grid lg:grid-cols-2 bg-background relative overflow-hidden">
+      <div className="absolute inset-0 grid-bg opacity-40 pointer-events-none" />
+      <div className="absolute -top-40 -left-40 size-[600px] rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-40 right-1/4 size-[500px] rounded-full bg-accent/10 blur-3xl pointer-events-none" />
+
       {/* Left: form */}
-      <div className="flex items-center justify-center p-8">
+      <div className="relative flex items-center justify-center p-6 md:p-8">
         <div className="w-full max-w-sm">
-          <Link to="/" className="flex items-center gap-2 mb-10">
-            <div className="size-6 bg-primary rounded grid place-items-center">
-              <div className="size-2 bg-background rounded-full" />
+          <Link to="/" className="inline-flex items-center gap-2 mb-10">
+            <div className="size-7 rounded-md bg-gradient-to-br from-brand to-emerald-700 grid place-items-center shadow-elev">
+              <div className="size-2 bg-background rounded-[2px] rotate-45" />
             </div>
             <span className="font-semibold tracking-tight">WeTask</span>
           </Link>
 
-          <Tabs defaultValue="login">
-            <TabsList className="grid grid-cols-2 mb-6">
-              <TabsTrigger value="login">Sign in</TabsTrigger>
-              <TabsTrigger value="signup">Sign up</TabsTrigger>
-            </TabsList>
-            <TabsContent value="login"><LoginForm /></TabsContent>
-            <TabsContent value="signup"><SignupForm /></TabsContent>
-          </Tabs>
+          <div className="rounded-xl ring-1 ring-border bg-card/60 glass p-6 shadow-elev">
+            <h1 className="text-xl font-semibold tracking-tight mb-1">Welcome back</h1>
+            <p className="text-sm text-muted-foreground mb-5">
+              Sign in to your workspace, or create a new one.
+            </p>
 
-          <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
-            <div className="h-px flex-1 bg-border" />
-            <span>OR</span>
-            <div className="h-px flex-1 bg-border" />
+            <Tabs defaultValue="login">
+              <TabsList className="grid grid-cols-2 mb-5 bg-white/[0.04]">
+                <TabsTrigger value="login">Sign in</TabsTrigger>
+                <TabsTrigger value="signup">Sign up</TabsTrigger>
+              </TabsList>
+              <TabsContent value="login"><LoginForm /></TabsContent>
+              <TabsContent value="signup"><SignupForm /></TabsContent>
+            </Tabs>
+
+            <div className="my-5 flex items-center gap-3 text-[10px] text-muted-foreground font-mono uppercase tracking-widest">
+              <div className="h-px flex-1 bg-border" />
+              <span>or</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+            <GoogleButton />
           </div>
-          <GoogleButton />
+
+          <p className="text-[11px] text-muted-foreground text-center mt-6 font-mono">
+            By continuing you agree to our terms.
+          </p>
         </div>
       </div>
 
       {/* Right: visual */}
-      <div className="hidden lg:flex items-center justify-center bg-surface-2 border-l border-border p-12">
+      <div className="relative hidden lg:flex items-center justify-center border-l border-border p-12">
         <div className="max-w-md">
-          <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
-            Welcome
-          </p>
-          <h2 className="text-3xl font-semibold tracking-tight leading-tight mb-4">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full ring-1 ring-border bg-card/60 glass mb-6 text-[11px] font-mono">
+            <span className="size-1.5 rounded-full bg-brand animate-pulse-dot" />
+            <span className="text-muted-foreground uppercase tracking-widest">Live</span>
+          </div>
+          <h2 className="text-4xl font-semibold tracking-tight leading-tight mb-4">
             Quiet software for teams that ship.
           </h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground leading-relaxed">
             WeTask replaces noisy task trackers with a clean kanban, role-based access,
             and a real-time activity stream — so you always know what's happening.
           </p>
-          <div className="mt-12 grid grid-cols-3 gap-3">
+          <div className="mt-10 grid grid-cols-3 gap-3">
             {["Plan", "Assign", "Ship"].map((s, i) => (
-              <div key={s} className="p-4 rounded-lg ring-1 ring-border bg-card">
-                <div className="text-xs font-mono text-muted-foreground">0{i + 1}</div>
-                <div className="text-sm font-medium mt-1">{s}</div>
+              <div key={s} className="p-4 rounded-lg ring-1 ring-border bg-card/60 glass hairline">
+                <div className="text-[10px] font-mono text-brand uppercase tracking-widest">0{i + 1}</div>
+                <div className="text-sm font-semibold mt-1.5">{s}</div>
               </div>
             ))}
           </div>
