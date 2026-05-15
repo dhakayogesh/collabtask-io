@@ -42,7 +42,7 @@ function AuthPage() {
             <div className="size-6 bg-primary rounded grid place-items-center">
               <div className="size-2 bg-background rounded-full" />
             </div>
-            <span className="font-semibold tracking-tight">Aether</span>
+            <span className="font-semibold tracking-tight">WeTask</span>
           </Link>
 
           <Tabs defaultValue="login">
@@ -73,7 +73,7 @@ function AuthPage() {
             Quiet software for teams that ship.
           </h2>
           <p className="text-muted-foreground">
-            Aether replaces noisy task trackers with a clean kanban, role-based access,
+            WeTask replaces noisy task trackers with a clean kanban, role-based access,
             and a real-time activity stream — so you always know what's happening.
           </p>
           <div className="mt-12 grid grid-cols-3 gap-3">

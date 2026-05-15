@@ -23,7 +23,7 @@ function Landing() {
           <div className="size-6 bg-primary rounded grid place-items-center">
             <div className="size-2 bg-background rounded-full" />
           </div>
-          <span className="font-semibold tracking-tight">Aether</span>
+          <span className="font-semibold tracking-tight">WeTask</span>
         </div>
         <div className="flex items-center gap-3">
           <Link to="/auth"><Button variant="ghost" size="sm">Sign in</Button></Link>

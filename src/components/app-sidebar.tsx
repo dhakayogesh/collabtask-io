@@ -15,7 +15,7 @@ export function AppSidebar() {
         <div className="size-6 bg-primary rounded grid place-items-center">
           <div className="size-2 bg-background rounded-full" />
         </div>
-        <span className="font-semibold tracking-tight">Aether</span>
+        <span className="font-semibold tracking-tight">WeTask</span>
       </Link>
 
       <nav className="flex-1 px-3 space-y-0.5">

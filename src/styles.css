@@ -4,7 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Aether — monochrome calm design system */
+/* WeTask — monochrome calm design system */
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);

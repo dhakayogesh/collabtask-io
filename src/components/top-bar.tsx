@@ -29,7 +29,7 @@ export function TopBar({ title, crumb }: { title: string; crumb?: string }) {
                 <div className="size-6 bg-primary rounded grid place-items-center">
                   <div className="size-2 bg-background rounded-full" />
                 </div>
-                Aether
+                WeTask
               </SheetTitle>
             </SheetHeader>
             <nav className="flex-1 px-3 space-y-0.5 mt-2">

@@ -53,7 +53,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Aether — Team Task Manager" },
+      { title: "WeTask — Team Task Manager" },
       { name: "description", content: "A calm, focused workspace for project and task management." },
     ],
     links: [
