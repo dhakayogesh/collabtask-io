@@ -182,18 +182,31 @@ function NewTaskDialog({ projectId, userId, members }: { projectId: string; user
   const m = useMutation({
     mutationFn: async () => {
       if (!title.trim()) throw new Error("Title required");
-      const { error } = await supabase.from("tasks").insert({
+      const base = {
         project_id: projectId,
         title: title.trim(),
         description: desc.trim(),
         priority: priority as any,
-        assignee_id: assignee ?? null,
         due_date: due ? new Date(due).toISOString() : null,
         created_by: userId,
-      });
-      if (error) throw error;
+      };
+      if (assignee === "__team__") {
+        if (members.length === 0) throw new Error("Add team members first");
+        const rows = members.map((mem) => ({ ...base, assignee_id: mem.user_id }));
+        const { error } = await supabase.from("tasks").insert(rows);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("tasks").insert({
+          ...base,
+          assignee_id: assignee && assignee !== "__none__" ? assignee : null,
+        });
+        if (error) throw error;
+      }
       await supabase.from("activity_log").insert({
-        project_id: projectId, user_id: userId, message: `created task ${title.trim()}`,
+        project_id: projectId, user_id: userId,
+        message: assignee === "__team__"
+          ? `assigned task ${title.trim()} to the whole team`
+          : `created task ${title.trim()}`,
       });
     },
     onSuccess: () => {
