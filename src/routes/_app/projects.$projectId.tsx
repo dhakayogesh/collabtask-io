@@ -70,7 +70,7 @@ function ProjectDetail() {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("tasks").update({ status }).eq("id", id);
+      const { error } = await supabase.from("tasks").update({ status: status as any }).eq("id", id);
       if (error) throw error;
       await supabase.from("activity_log").insert({
         project_id: projectId, user_id: user!.id,
@@ -186,7 +186,7 @@ function NewTaskDialog({ projectId, userId, members }: { projectId: string; user
         project_id: projectId,
         title: title.trim(),
         description: desc.trim(),
-        priority,
+        priority: priority as any,
         assignee_id: assignee ?? null,
         due_date: due ? new Date(due).toISOString() : null,
         created_by: userId,
