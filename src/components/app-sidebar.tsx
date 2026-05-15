@@ -1,22 +1,16 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
-import { LayoutGrid, FolderKanban, CheckSquare, Users, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-
-const items = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutGrid },
-  { to: "/projects", label: "Projects", icon: FolderKanban },
-  { to: "/tasks", label: "Tasks", icon: CheckSquare },
-  { to: "/team", label: "Team", icon: Users },
-] as const;
+import { navItems } from "./nav-items";
 
 export function AppSidebar() {
   const { user, role, signOut } = useAuth();
   const path = useRouterState({ select: (s) => s.location.pathname });
 
   return (
-    <aside className="w-60 border-r border-border flex flex-col h-screen sticky top-0 bg-sidebar">
+    <aside className="hidden md:flex w-60 border-r border-border flex-col h-screen sticky top-0 bg-sidebar">
       <Link to="/dashboard" className="p-6 flex items-center gap-2">
         <div className="size-6 bg-primary rounded grid place-items-center">
           <div className="size-2 bg-background rounded-full" />
@@ -25,7 +19,7 @@ export function AppSidebar() {
       </Link>
 
       <nav className="flex-1 px-3 space-y-0.5">
-        {items.map((it) => {
+        {navItems.map((it) => {
           const active = path === it.to || path.startsWith(it.to + "/");
           const Icon = it.icon;
           return (

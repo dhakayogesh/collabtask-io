@@ -35,8 +35,8 @@ function Projects() {
   return (
     <>
       <TopBar title="Projects" />
-      <div className="p-8 max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
             <p className="text-sm text-muted-foreground mt-1">

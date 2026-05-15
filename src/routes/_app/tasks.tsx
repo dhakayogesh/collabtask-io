@@ -37,7 +37,7 @@ function TasksPage() {
   return (
     <>
       <TopBar title="All tasks" />
-      <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
           <p className="text-sm text-muted-foreground mt-1">Everything across your projects.</p>
@@ -62,7 +62,8 @@ function TasksPage() {
         </div>
 
         <div className="ring-1 ring-border rounded-xl bg-card overflow-hidden">
-          <table className="w-full text-sm">
+         <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="border-b border-border bg-secondary/30">
                 <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Task</th>
@@ -93,6 +94,7 @@ function TasksPage() {
               )}
             </tbody>
           </table>
+         </div>
         </div>
       </div>
     </>
