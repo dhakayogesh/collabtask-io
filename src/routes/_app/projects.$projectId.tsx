@@ -247,6 +247,8 @@ function NewTaskDialog({ projectId, userId, members }: { projectId: string; user
             <Select value={assignee} onValueChange={setAssignee}>
               <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="__none__">Unassigned</SelectItem>
+                <SelectItem value="__team__">👥 Whole team (one task per member)</SelectItem>
                 {members.map((m) => (
                   <SelectItem key={m.user_id} value={m.user_id}>
                     {m.profiles?.name ?? m.profiles?.email}
