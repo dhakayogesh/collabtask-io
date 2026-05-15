@@ -84,8 +84,8 @@ function ProjectDetail() {
   return (
     <>
       <TopBar title={project.data?.name ?? "Project"} crumb="Projects" />
-      <div className="p-8 max-w-7xl mx-auto space-y-6">
-        <div className="flex items-start justify-between gap-6">
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
           <div>
             <Link to="/projects" className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground mb-2">
               <ChevronLeft className="size-3 mr-1" />Back to projects
@@ -93,7 +93,7 @@ function ProjectDetail() {
             <h1 className="text-2xl font-semibold tracking-tight">{project.data?.name}</h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{project.data?.description || "—"}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {isAdmin && <AddMemberDialog projectId={projectId} existing={members.data?.map((m: any) => m.user_id) ?? []} />}
             {isAdmin && <NewTaskDialog projectId={projectId} userId={user!.id} members={members.data ?? []} />}
           </div>
