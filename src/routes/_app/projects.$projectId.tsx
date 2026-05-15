@@ -99,37 +99,55 @@ function ProjectDetail() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {COLS.map((c) => {
             const items = (tasks.data ?? []).filter((t) => t.status === c.key);
+            const accent = c.key === "done" ? "bg-emerald-400" : c.key === "in_progress" ? "bg-sky-400" : "bg-zinc-500";
             return (
-              <div key={c.key} className="space-y-3">
+              <div key={c.key} className="space-y-3 rounded-xl ring-1 ring-border bg-card/40 p-3">
                 <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{c.label}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary ring-1 ring-border">{items.length}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`size-1.5 rounded-full ${accent}`} />
+                    <span className="text-[11px] font-semibold text-foreground uppercase tracking-widest">{c.label}</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] ring-1 ring-border">
+                    {items.length}
+                  </span>
                 </div>
                 <div className="space-y-2 min-h-[120px]">
                   {items.map((t: any) => (
-                    <div key={t.id} className="p-4 bg-card ring-1 ring-border rounded-lg space-y-3 hover:ring-foreground/20 transition-all">
-                      <div className="text-sm font-medium">{t.title}</div>
+                    <div
+                      key={t.id}
+                      className="group p-3.5 bg-card ring-1 ring-border rounded-lg space-y-3 hover:ring-white/15 hover:-translate-y-0.5 transition-all shadow-elev hairline cursor-pointer"
+                    >
+                      <div className="text-sm font-medium leading-snug">{t.title}</div>
                       <div className="flex items-center justify-between">
                         <PriorityBadge priority={t.priority} />
                         {t.due_date && (
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-[10px] text-muted-foreground font-mono">
                             {format(new Date(t.due_date), "MMM d")}
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {t.profiles?.name ?? "Unassigned"}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground truncate">
+                          {t.profiles?.name ? (
+                            <>
+                              <div className="size-4 rounded-full bg-gradient-to-br from-brand/40 to-accent/40 grid place-items-center text-[9px] font-semibold uppercase ring-1 ring-white/10">
+                                {t.profiles.name.slice(0, 1)}
+                              </div>
+                              <span className="truncate">{t.profiles.name}</span>
+                            </>
+                          ) : (
+                            <span>Unassigned</span>
+                          )}
                         </div>
                         {(isAdmin || t.assignee_id === user?.id) && (
                           <Select
                             value={t.status}
                             onValueChange={(v) => updateStatus.mutate({ id: t.id, status: v })}
                           >
-                            <SelectTrigger className="h-7 text-[11px] w-28"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-6 text-[10px] w-24 bg-white/[0.03]"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="todo">Todo</SelectItem>
                               <SelectItem value="in_progress">In Progress</SelectItem>
@@ -141,8 +159,8 @@ function ProjectDetail() {
                     </div>
                   ))}
                   {items.length === 0 && (
-                    <div className="text-xs text-muted-foreground text-center py-6 ring-1 ring-dashed ring-border rounded-lg">
-                      No tasks
+                    <div className="text-xs text-muted-foreground text-center py-8 ring-1 ring-dashed ring-border rounded-lg">
+                      Drop tasks here
                     </div>
                   )}
                 </div>

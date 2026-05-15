@@ -135,7 +135,7 @@ function LoginForm() {
         <Label htmlFor="li-password">Password</Label>
         <Input id="li-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
       </div>
-      <Button type="submit" className="w-full" disabled={busy}>
+      <Button type="submit" className="w-full bg-brand text-brand-foreground hover:bg-brand/90 shadow-elev" disabled={busy}>
         {busy && <Loader2 className="size-4 animate-spin mr-2" />}
         Sign in
       </Button>
@@ -185,7 +185,7 @@ function SignupForm() {
         <Input id="su-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <p className="text-xs text-muted-foreground">Minimum 8 characters.</p>
       </div>
-      <Button type="submit" className="w-full" disabled={busy}>
+      <Button type="submit" className="w-full bg-brand text-brand-foreground hover:bg-brand/90 shadow-elev" disabled={busy}>
         {busy && <Loader2 className="size-4 animate-spin mr-2" />}
         Create account
       </Button>
