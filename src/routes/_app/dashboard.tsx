@@ -1,67 +1,106 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { TopBar } from "@/components/top-bar";
 import { PriorityBadge, StatusPill } from "@/components/badges";
 import { useAuth } from "@/lib/auth-context";
-import { format, isPast, differenceInDays } from "date-fns";
-import { ArrowUpRight, AlertTriangle, CheckCircle2, Clock, Activity, Plus, FolderPlus, UserPlus, Sparkles } from "lucide-react";
+import { apiClient, type ApiResponse } from "@/lib/api-client";
+import { format, differenceInDays } from "date-fns";
+import { ArrowUpRight, AlertTriangle, CheckCircle2, Clock, Activity, Plus, FolderPlus, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: Dashboard,
 });
 
+type ApiTask = {
+  id: string;
+  title: string;
+  status: "TODO" | "IN_PROGRESS" | "DONE";
+  priority: "LOW" | "MEDIUM" | "HIGH";
+  assignmentType: "UNASSIGNED" | "USER" | "TEAM";
+  dueDate: string | null;
+  assignedToId: string | null;
+  project?: { id: string; name: string } | null;
+  assignedTo?: { id: string; name: string | null; email: string } | null;
+};
+
+type DashboardData = {
+  statistics: {
+    total: number;
+    completed: number;
+    inProgress: number;
+    backlog: number;
+    overdue: number;
+    assignedToMe: number;
+    activeProjects: number;
+    completionRate: number;
+  };
+  tasksByStatus: {
+    TODO: number;
+    IN_PROGRESS: number;
+    DONE: number;
+  };
+  upcomingDeadlines: ApiTask[];
+  assignedTasks: ApiTask[];
+  recentActivity: {
+    id: string;
+    message: string;
+    createdAt: string;
+    actor?: { name: string | null; email: string } | null;
+  }[];
+};
+
+const statusFromApi = {
+  TODO: "todo",
+  IN_PROGRESS: "in_progress",
+  DONE: "done",
+} as const;
+
+const priorityFromApi = {
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+} as const;
+
 function Dashboard() {
-  const { user } = useAuth();
-  const tasks = useQuery({
-    queryKey: ["tasks-all"],
+  const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+  const dashboard = useQuery({
+    queryKey: ["dashboard"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("id, title, status, priority, due_date, assignee_id, project_id, projects(name), profiles:assignee_id(name)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
+      const response = await apiClient.get<ApiResponse<DashboardData>>("/dashboard");
+      return response.data.data;
     },
-  });
-  const activity = useQuery({
-    queryKey: ["activity"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("activity_log")
-        .select("id, message, created_at, profiles:user_id(name)")
-        .order("created_at", { ascending: false })
-        .limit(8);
-      return data ?? [];
-    },
+    refetchInterval: 10000,
+    staleTime: 15000,
+    placeholderData: (previous) => previous,
   });
 
-  const all = tasks.data ?? [];
-  const total = all.length;
-  const inProgress = all.filter((t) => t.status === "in_progress").length;
-  const done = all.filter((t) => t.status === "done").length;
-  const todo = all.filter((t) => t.status === "todo").length;
-  const overdue = all.filter(
-    (t) => t.due_date && t.status !== "done" && isPast(new Date(t.due_date)),
-  ).length;
-  const completionRate = total > 0 ? Math.round((done / total) * 100) : 0;
-  const mine = all.filter((t) => t.assignee_id === user?.id && t.status !== "done").slice(0, 6);
-  const upcoming = all
-    .filter((t) => t.due_date && t.status !== "done")
-    .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime())
-    .slice(0, 5);
+  const stats = dashboard.data?.statistics;
+  const tasksByStatus = dashboard.data?.tasksByStatus;
+  const hasDashboardData = Boolean(dashboard.data && stats);
+  const isInitialLoading = dashboard.isLoading && !dashboard.data;
+  const total = stats?.total;
+  const inProgress = stats?.inProgress ?? tasksByStatus?.IN_PROGRESS;
+  const done = stats?.completed ?? tasksByStatus?.DONE;
+  const todo = stats?.backlog ?? tasksByStatus?.TODO;
+  const overdue = stats?.overdue;
+  const completionRate = stats?.completionRate;
+  const mine = dashboard.data?.assignedTasks ?? [];
+  const upcoming = dashboard.data?.upcomingDeadlines ?? [];
+  const activity = dashboard.data?.recentActivity ?? [];
 
-  // workload per assignee
   const workload = new Map<string, { name: string; count: number }>();
-  all.filter((t) => t.status !== "done" && t.assignee_id).forEach((t: any) => {
-    const k = t.assignee_id;
-    const cur = workload.get(k) ?? { name: t.profiles?.name ?? "Unknown", count: 0 };
+  [...mine, ...upcoming].filter((t) => t.status !== "DONE" && t.assignedToId).forEach((t) => {
+    const k = t.assignedToId!;
+    const cur = workload.get(k) ?? { name: t.assignedTo?.name ?? "Unknown", count: 0 };
     cur.count += 1;
     workload.set(k, cur);
   });
   const team = Array.from(workload.values()).sort((a, b) => b.count - a.count).slice(0, 5);
   const maxLoad = Math.max(1, ...team.map((t) => t.count));
+  const displayName = user?.name?.trim();
+  const greeting = authLoading ? "" : displayName ? `Welcome back, ${displayName} 👋` : "Welcome back 👋";
 
   return (
     <>
@@ -70,7 +109,7 @@ function Dashboard() {
         <section className="flex items-end justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
-              Good to see you back.
+              {authLoading ? <span className="inline-block h-8 w-56 rounded bg-white/[0.06] animate-pulse" /> : greeting}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               Here's what's moving across your workspace.
@@ -78,48 +117,86 @@ function Dashboard() {
           </div>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
             <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse-dot" />
-            All systems operational
+            {isInitialLoading ? "Syncing workspace" : dashboard.isError ? "Sync failed" : `${stats?.activeProjects} active projects`}
           </div>
         </section>
 
-        {/* Stats row */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-          <Stat label="Total tasks" value={total} hint={`${todo} backlog`} icon={<Activity className="size-3.5" />} />
-          <Stat label="In progress" value={inProgress} hint="Active work" icon={<Clock className="size-3.5" />} accent="text-sky-300" />
-          <Stat
-            label="Overdue"
-            value={overdue}
-            hint={overdue > 0 ? "Needs attention" : "All clear"}
-            icon={<AlertTriangle className="size-3.5" />}
-            accent={overdue > 0 ? "text-rose-300" : undefined}
-          />
-          <Stat
-            label="Completed"
-            value={done}
-            hint={`${completionRate}% completion`}
-            icon={<CheckCircle2 className="size-3.5" />}
-            accent="text-emerald-300"
-          />
+          {isInitialLoading ? (
+            Array.from({ length: 4 }).map((_, index) => <StatSkeleton key={index} />)
+          ) : dashboard.isError ? (
+            <div className="col-span-full ring-1 ring-border rounded-xl bg-card/60 p-6 text-sm text-destructive">
+              Could not load dashboard stats. Please try again.
+            </div>
+          ) : hasDashboardData ? (
+            <>
+              <Stat label="Total tasks" value={total!} hint={`${todo} backlog`} icon={<Activity className="size-3.5" />} />
+              <Stat label="In progress" value={inProgress!} hint="Active work" icon={<Clock className="size-3.5" />} accent="text-sky-300" />
+              <Stat
+                label="Overdue"
+                value={overdue!}
+                hint={overdue! > 0 ? "Needs attention" : "All clear"}
+                icon={<AlertTriangle className="size-3.5" />}
+                accent={overdue! > 0 ? "text-rose-300" : undefined}
+              />
+              <Stat
+                label="Completed"
+                value={done!}
+                hint={`${completionRate}% completion`}
+                icon={<CheckCircle2 className="size-3.5" />}
+                accent="text-emerald-300"
+              />
+            </>
+          ) : null}
         </section>
 
         {/* Sprint + Quick actions */}
         <section className="grid lg:grid-cols-3 gap-4">
-          <SprintProgress done={done} total={total} inProgress={inProgress} />
+          {isInitialLoading || !hasDashboardData ? (
+            <SprintSkeleton />
+          ) : (
+            <SprintProgress done={done!} total={total!} inProgress={inProgress!} />
+          )}
           <div className="lg:col-span-2 ring-1 ring-border rounded-xl bg-card/60 p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold tracking-tight">Quick actions</h2>
-              <Sparkles className="size-3.5 text-brand" />
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-              <QuickAction icon={<Plus className="size-4" />} label="New task" />
-              <QuickAction icon={<FolderPlus className="size-4" />} label="New project" />
-              <QuickAction icon={<UserPlus className="size-4" />} label="Invite member" />
-              <QuickAction icon={<Sparkles className="size-4" />} label="AI summary" accent />
+              <QuickAction
+                icon={<Plus className="size-4" />}
+                label="New task"
+                onClick={() => navigate({ to: "/tasks" })}
+              />
+              <QuickAction
+                icon={<FolderPlus className="size-4" />}
+                label="New project"
+                onClick={() => navigate({ to: "/projects" })}
+              />
+              <QuickAction
+                icon={<UserPlus className="size-4" />}
+                label="Invite member"
+                onClick={() => navigate({ to: "/team" })}
+              />
+              <QuickAction
+                icon={<Activity className="size-4" />}
+                label="View activity"
+                onClick={() => document.getElementById("dashboard-activity")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              />
             </div>
             <div className="mt-5 pt-5 border-t border-border grid grid-cols-3 gap-4 text-center">
-              <Mini label="Backlog" value={todo} />
-              <Mini label="Active" value={inProgress} accent="text-sky-300" />
-              <Mini label="Shipped" value={done} accent="text-emerald-300" />
+              {isInitialLoading || !hasDashboardData ? (
+                <>
+                  <MiniSkeleton />
+                  <MiniSkeleton />
+                  <MiniSkeleton />
+                </>
+              ) : (
+                <>
+                  <Mini label="Backlog" value={todo!} />
+                  <Mini label="Active" value={inProgress!} accent="text-sky-300" />
+                  <Mini label="Shipped" value={done!} accent="text-emerald-300" />
+                </>
+              )}
             </div>
           </div>
         </section>
@@ -129,10 +206,14 @@ function Dashboard() {
           <div className="lg:col-span-2 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold tracking-tight">My active tasks</h2>
-              <span className="text-xs text-muted-foreground font-mono">{mine.length} open</span>
+              <span className="text-xs text-muted-foreground font-mono">
+                {isInitialLoading ? "Loading" : `${mine.length} open`}
+              </span>
             </div>
             <div className="ring-1 ring-border rounded-xl bg-card/60 overflow-hidden">
-              {mine.length === 0 ? (
+              {isInitialLoading ? (
+                <TaskTableSkeleton />
+              ) : mine.length === 0 ? (
                 <EmptyState message="No tasks assigned to you yet." />
               ) : (
                 <div className="overflow-x-auto">
@@ -154,13 +235,13 @@ function Dashboard() {
                               <ArrowUpRight className="size-3 opacity-0 group-hover:opacity-60 transition-opacity" />
                             </div>
                             <div className="text-[11px] text-muted-foreground font-mono">
-                              {(t as any).projects?.name ?? "—"}
+                              {t.project?.name ?? "—"}
                             </div>
                           </td>
-                          <td className="px-4 py-3"><PriorityBadge priority={t.priority as any} /></td>
-                          <td className="px-4 py-3"><StatusPill status={t.status as any} /></td>
+                          <td className="px-4 py-3"><PriorityBadge priority={priorityFromApi[t.priority]} /></td>
+                          <td className="px-4 py-3"><StatusPill status={statusFromApi[t.status]} /></td>
                           <td className="px-4 py-3 text-right text-muted-foreground text-xs">
-                            {t.due_date ? format(new Date(t.due_date), "MMM d") : "—"}
+                            {t.dueDate ? format(new Date(t.dueDate), "MMM d") : "—"}
                           </td>
                         </tr>
                       ))}
@@ -176,7 +257,9 @@ function Dashboard() {
                 <h2 className="text-sm font-semibold tracking-tight">Team workload</h2>
                 <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Open tasks</span>
               </div>
-              {team.length === 0 ? (
+              {isInitialLoading ? (
+                <WorkloadSkeleton />
+              ) : team.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4">No active assignments.</p>
               ) : (
                 <div className="space-y-3">
@@ -209,11 +292,13 @@ function Dashboard() {
             <div className="space-y-3">
               <h2 className="text-sm font-semibold tracking-tight">Upcoming deadlines</h2>
               <div className="ring-1 ring-border rounded-xl bg-card/60 divide-y divide-border overflow-hidden">
-                {upcoming.length === 0 ? (
+                {isInitialLoading ? (
+                  <ListSkeleton rows={3} />
+                ) : upcoming.length === 0 ? (
                   <EmptyState message="No upcoming deadlines." compact />
                 ) : (
-                  upcoming.map((t: any) => {
-                    const days = differenceInDays(new Date(t.due_date), new Date());
+                  upcoming.map((t) => {
+                    const days = differenceInDays(new Date(t.dueDate!), new Date());
                     const urgent = days <= 1;
                     return (
                       <div key={t.id} className="flex items-start gap-3 p-3.5 hover:bg-white/[0.03] transition-colors">
@@ -224,7 +309,7 @@ function Dashboard() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{t.title}</p>
                           <p className="text-[11px] text-muted-foreground font-mono">
-                            {t.projects?.name ?? "—"}
+                            {t.project?.name ?? "—"}
                           </p>
                         </div>
                         <span className={cn(
@@ -243,22 +328,23 @@ function Dashboard() {
             </div>
 
             {/* Activity */}
-            <div className="space-y-3">
+            <div id="dashboard-activity" className="space-y-3 scroll-mt-20">
               <h2 className="text-sm font-semibold tracking-tight">Activity</h2>
               <div className="ring-1 ring-border rounded-xl bg-card/60 p-5 space-y-4 min-h-[200px]">
-                {(activity.data ?? []).length === 0 && (
+                {isInitialLoading && <ActivitySkeleton />}
+                {!isInitialLoading && activity.length === 0 && (
                   <EmptyState message="No activity yet." compact />
                 )}
-                {(activity.data ?? []).map((a: any) => (
+                {!isInitialLoading && activity.map((a) => (
                   <div key={a.id} className="flex gap-3">
                     <div className="size-1.5 rounded-full bg-brand mt-1.5 shrink-0 shadow-[0_0_6px_var(--brand)]" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm leading-snug">
-                        <span className="font-medium">{a.profiles?.name ?? "Someone"}</span>{" "}
+                        <span className="font-medium">{a.actor?.name ?? "Someone"}</span>{" "}
                         <span className="text-muted-foreground">{a.message}</span>
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
-                        {format(new Date(a.created_at), "MMM d, h:mm a")}
+                        {format(new Date(a.createdAt), "MMM d, h:mm a")}
                       </p>
                     </div>
                   </div>
@@ -299,6 +385,19 @@ function Stat({
   );
 }
 
+function StatSkeleton() {
+  return (
+    <div className="p-4 md:p-5 bg-card/60 ring-1 ring-border rounded-xl hairline animate-pulse">
+      <div className="flex items-center justify-between mb-3">
+        <div className="h-3 w-24 rounded bg-white/[0.06]" />
+        <div className="size-4 rounded bg-white/[0.06]" />
+      </div>
+      <div className="h-8 w-16 rounded bg-white/[0.06]" />
+      <div className="h-3 w-20 rounded bg-white/[0.06] mt-3" />
+    </div>
+  );
+}
+
 function Mini({ label, value, accent }: { label: string; value: number; accent?: string }) {
   return (
     <div>
@@ -310,17 +409,30 @@ function Mini({ label, value, accent }: { label: string; value: number; accent?:
   );
 }
 
+function MiniSkeleton() {
+  return (
+    <div className="grid place-items-center gap-2 animate-pulse">
+      <div className="h-5 w-10 rounded bg-white/[0.06]" />
+      <div className="h-3 w-14 rounded bg-white/[0.06]" />
+    </div>
+  );
+}
+
 function QuickAction({
   icon,
   label,
   accent,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   accent?: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
+      type="button"
+      onClick={onClick}
       className={cn(
         "flex flex-col items-start gap-2 p-3 rounded-lg ring-1 ring-border bg-white/[0.02] hover:bg-white/[0.05] hover:ring-white/15 transition-all text-left group",
         accent && "ring-brand/30 bg-brand/5 hover:bg-brand/10 hover:ring-brand/50",
@@ -381,12 +493,98 @@ function SprintProgress({ done, total, inProgress }: { done: number; total: numb
   );
 }
 
+function SprintSkeleton() {
+  return (
+    <div className="ring-1 ring-border rounded-xl bg-card/60 p-5 animate-pulse">
+      <div className="flex items-center justify-between mb-4">
+        <div className="h-4 w-28 rounded bg-white/[0.06]" />
+        <div className="h-3 w-10 rounded bg-white/[0.06]" />
+      </div>
+      <div className="flex items-center gap-5">
+        <div className="size-28 rounded-full bg-white/[0.06] shrink-0" />
+        <div className="flex-1 space-y-3">
+          <div className="h-3 w-full rounded bg-white/[0.06]" />
+          <div className="h-3 w-5/6 rounded bg-white/[0.06]" />
+          <div className="h-3 w-4/6 rounded bg-white/[0.06]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Row({ label, value, dot }: { label: string; value: number; dot: string }) {
   return (
     <div className="flex items-center gap-2.5">
       <span className={cn("size-1.5 rounded-full", dot)} />
       <span className="text-muted-foreground flex-1">{label}</span>
       <span className="font-medium tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function TaskTableSkeleton() {
+  return (
+    <div className="p-4 space-y-3 animate-pulse">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="grid grid-cols-[1fr_72px_88px_56px] gap-3 items-center">
+          <div className="space-y-2">
+            <div className="h-4 w-3/4 rounded bg-white/[0.06]" />
+            <div className="h-3 w-32 rounded bg-white/[0.06]" />
+          </div>
+          <div className="h-5 rounded-full bg-white/[0.06]" />
+          <div className="h-5 rounded-full bg-white/[0.06]" />
+          <div className="h-3 rounded bg-white/[0.06]" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WorkloadSkeleton() {
+  return (
+    <div className="space-y-3 animate-pulse">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className="flex items-center gap-3">
+          <div className="size-7 rounded-full bg-white/[0.06] shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-1/2 rounded bg-white/[0.06]" />
+            <div className="h-1.5 w-full rounded-full bg-white/[0.06]" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ListSkeleton({ rows }: { rows: number }) {
+  return (
+    <div className="divide-y divide-border animate-pulse">
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="flex items-start gap-3 p-3.5">
+          <div className="size-1.5 rounded-full mt-1.5 bg-white/[0.06] shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-3/4 rounded bg-white/[0.06]" />
+            <div className="h-3 w-1/2 rounded bg-white/[0.06]" />
+          </div>
+          <div className="h-5 w-12 rounded-full bg-white/[0.06]" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ActivitySkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="flex gap-3">
+          <div className="size-1.5 rounded-full bg-white/[0.06] mt-1.5 shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-full rounded bg-white/[0.06]" />
+            <div className="h-3 w-24 rounded bg-white/[0.06]" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

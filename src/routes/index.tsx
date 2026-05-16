@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, KanbanSquare, Users, ArrowRight, Sparkles, Zap, Shield } from "lucide-react";
+import { CheckCircle2, KanbanSquare, Users, ArrowRight, Zap, Shield } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -43,8 +43,8 @@ function Landing() {
 
       <main className="relative z-10 max-w-5xl mx-auto px-6 md:px-8 pt-16 md:pt-24 pb-20 text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full ring-1 ring-border bg-card/60 glass mb-6 text-xs font-mono">
-          <Sparkles className="size-3 text-brand" />
-          <span className="text-muted-foreground">Now with AI summaries</span>
+          <CheckCircle2 className="size-3 text-brand" />
+          <span className="text-muted-foreground">Built for focused team delivery</span>
         </div>
 
         <h1 className="text-4xl md:text-6xl lg:text-7xl font-semibold tracking-tight leading-[1.05] mb-6">
@@ -64,7 +64,6 @@ function Landing() {
               <ArrowRight className="size-4 ml-1.5" />
             </Button>
           </Link>
-          <Link to="/auth"><Button size="lg" variant="outline">View demo</Button></Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-24 text-left">

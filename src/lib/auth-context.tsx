@@ -1,63 +1,173 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  apiClient,
+  AUTH_TOKEN_KEY,
+  type ApiResponse,
+  type ApiUser,
+  type AuthPayload,
+} from "@/lib/api-client";
 
 export type AppRole = "admin" | "member";
 
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  address?: string | null;
+  bloodGroup?: string | null;
+  role: AppRole;
+};
+
+type AuthSession = {
+  token: string;
+  user: AuthUser;
+};
+
+type LoginInput = {
+  email: string;
+  password: string;
+};
+
+type SignupInput = LoginInput & {
+  name: string;
+  role?: "ADMIN" | "MEMBER";
+  adminPasscode?: string;
+};
+
+type ProfileInput = {
+  name: string;
+  phone?: string | null;
+  address?: string | null;
+  bloodGroup?: string | null;
+};
+
 interface AuthCtx {
-  user: User | null;
-  session: Session | null;
+  user: AuthUser | null;
+  session: AuthSession | null;
+  token: string | null;
   role: AppRole | null;
   loading: boolean;
+  login: (input: LoginInput) => Promise<AuthUser>;
+  signup: (input: SignupInput) => Promise<AuthUser>;
+  updateProfile: (input: ProfileInput) => Promise<AuthUser>;
   signOut: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx | undefined>(undefined);
 
+function toAuthUser(user: ApiUser): AuthUser {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone ?? null,
+    address: user.address ?? null,
+    bloodGroup: user.bloodGroup ?? null,
+    role: user.role === "ADMIN" ? "admin" : "member",
+  };
+}
+
+function storeToken(token: string) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+  }
+}
+
+function clearToken() {
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+
+function readToken() {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [role, setRole] = useState<AppRole | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Listener FIRST
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      if (s?.user) {
-        // defer to avoid deadlocks
-        setTimeout(() => fetchRole(s.user.id), 0);
-      } else {
-        setRole(null);
+    let cancelled = false;
+
+    async function hydrateSession() {
+      const token = readToken();
+      if (!token) {
+        if (!cancelled) setLoading(false);
+        return;
       }
-    });
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      if (data.session?.user) fetchRole(data.session.user.id);
-      setLoading(false);
-    });
+      try {
+        const { data } = await apiClient.get<ApiResponse<{ user: ApiUser }>>("/auth/me");
+        if (cancelled) return;
 
-    return () => sub.subscription.unsubscribe();
+        const user = toAuthUser(data.data.user);
+        setSession({ token, user });
+      } catch {
+        clearToken();
+        if (!cancelled) setSession(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    hydrateSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  async function fetchRole(userId: string) {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .maybeSingle();
-    setRole((data?.role as AppRole) ?? "member");
+  async function login(input: LoginInput) {
+    const { data } = await apiClient.post<ApiResponse<AuthPayload>>("/auth/login", input);
+    const user = toAuthUser(data.data.user);
+    const nextSession = { token: data.data.token, user };
+    storeToken(nextSession.token);
+    setSession(nextSession);
+    return user;
+  }
+
+  async function signup(input: SignupInput) {
+    const { data } = await apiClient.post<ApiResponse<AuthPayload>>("/auth/signup", input);
+    const user = toAuthUser(data.data.user);
+    const nextSession = { token: data.data.token, user };
+    storeToken(nextSession.token);
+    setSession(nextSession);
+    return user;
+  }
+
+  async function updateProfile(input: ProfileInput) {
+    const { data } = await apiClient.patch<ApiResponse<{ user: ApiUser }>>("/auth/me", input);
+    const user = toAuthUser(data.data.user);
+    setSession((current) => {
+      if (!current) return current;
+      return { ...current, user };
+    });
+    return user;
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
+    clearToken();
+    setSession(null);
   }
 
-  return (
-    <Ctx.Provider value={{ user: session?.user ?? null, session, role, loading, signOut }}>
-      {children}
-    </Ctx.Provider>
+  const value = useMemo<AuthCtx>(
+    () => ({
+      user: session?.user ?? null,
+      session,
+      token: session?.token ?? null,
+      role: session?.user.role ?? null,
+      loading,
+      login,
+      signup,
+      updateProfile,
+      signOut,
+    }),
+    [loading, session],
   );
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {

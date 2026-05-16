@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum AssignmentType {
+  UNASSIGNED
+  USER
+  TEAM
+}
+
+model User {
+  id                 String          @id @default(cuid())
+  name               String
+  email              String          @unique
+  password           String
+  phone              String?
+  address            String?
+  bloodGroup         String?
+  role               Role            @default(MEMBER)
+  assignedTasks      Task[]          @relation("TaskAssignee")
+  createdTasks       Task[]          @relation("TaskCreator")
+  createdProjects    Project[]       @relation("ProjectCreator")
+  projectMemberships ProjectMember[]
+  createdAt          DateTime        @default(now())
+}
+
+model Project {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  createdById String
+  createdBy   User            @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  members     ProjectMember[]
+  tasks       Task[]
+  createdAt   DateTime        @default(now())
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model Task {
+  id           String     @id @default(cuid())
+  title        String
+  description  String?
+  status       TaskStatus @default(TODO)
+  priority     Priority   @default(MEDIUM)
+  assignmentType AssignmentType @default(UNASSIGNED)
+  dueDate      DateTime?
+  projectId    String
+  createdById  String
+  assignedToId String?
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy    User       @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  assignedTo   User?      @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now())
+
+  @@index([projectId])
+  @@index([assignedToId])
+  @@index([assignmentType])
+  @@index([status])
+  @@index([dueDate])
+}

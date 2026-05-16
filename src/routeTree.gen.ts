@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTeamRouteImport } from './routes/_app/team'
 import { Route as AppTasksRouteImport } from './routes/_app/tasks'
+import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects.index'
 import { Route as AppProjectsProjectIdRouteImport } from './routes/_app/projects.$projectId'
@@ -42,6 +43,11 @@ const AppTasksRoute = AppTasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProfileRoute = AppProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -62,6 +68,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AppDashboardRoute
+  '/profile': typeof AppProfileRoute
   '/tasks': typeof AppTasksRoute
   '/team': typeof AppTeamRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AppDashboardRoute
+  '/profile': typeof AppProfileRoute
   '/tasks': typeof AppTasksRoute
   '/team': typeof AppTeamRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
@@ -82,6 +90,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/profile': typeof AppProfileRoute
   '/_app/tasks': typeof AppTasksRoute
   '/_app/team': typeof AppTeamRoute
   '/_app/projects/$projectId': typeof AppProjectsProjectIdRoute
@@ -93,6 +102,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/dashboard'
+    | '/profile'
     | '/tasks'
     | '/team'
     | '/projects/$projectId'
@@ -102,6 +112,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/dashboard'
+    | '/profile'
     | '/tasks'
     | '/team'
     | '/projects/$projectId'
@@ -112,6 +123,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/auth'
     | '/_app/dashboard'
+    | '/_app/profile'
     | '/_app/tasks'
     | '/_app/team'
     | '/_app/projects/$projectId'
@@ -161,6 +173,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTasksRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/profile': {
+      id: '/_app/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AppProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -187,6 +206,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
+  AppProfileRoute: typeof AppProfileRoute
   AppTasksRoute: typeof AppTasksRoute
   AppTeamRoute: typeof AppTeamRoute
   AppProjectsProjectIdRoute: typeof AppProjectsProjectIdRoute
@@ -195,6 +215,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
+  AppProfileRoute: AppProfileRoute,
   AppTasksRoute: AppTasksRoute,
   AppTeamRoute: AppTeamRoute,
   AppProjectsProjectIdRoute: AppProjectsProjectIdRoute,
@@ -211,3 +232,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
