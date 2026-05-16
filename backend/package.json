@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "collabtask-backend",
   "version": "1.0.0",
   "description": "Production-ready task management backend with Express, PostgreSQL, Prisma, and JWT auth.",
   "main": "src/server.js",

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
 import { Search, Bell, Menu, LogOut, Plus, FolderKanban, CheckSquare, Users, UserRound } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetHeader } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,32 @@ import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { navItems } from "./nav-items";
 import { toast } from "sonner";
+import { apiClient, type ApiResponse } from "@/lib/api-client";
+
+type SearchProject = {
+  id: string;
+  name: string;
+  description: string | null;
+};
+
+type SearchTask = {
+  id: string;
+  title: string;
+  status: string;
+  project?: {
+    name: string;
+  } | null;
+};
+
+type SearchProfile = {
+  id: string;
+  name: string | null;
+  email: string;
+};
+
+type TeamMember = SearchProfile & {
+  role: "ADMIN" | "MEMBER";
+};
 
 export function TopBar({ title, crumb }: { title: string; crumb?: string }) {
   const [open, setOpen] = useState(false);
@@ -30,34 +55,21 @@ export function TopBar({ title, crumb }: { title: string; crumb?: string }) {
   const searchData = useQuery({
     queryKey: ["topbar-search"],
     queryFn: async () => {
-      const [tasks, projects, profiles] = await Promise.all([
-        supabase
-          .from("tasks")
-          .select("id, title, status, projects(name)")
-          .order("updated_at", { ascending: false })
-          .limit(12),
-        supabase
-          .from("projects")
-          .select("id, name, description")
-          .order("created_at", { ascending: false })
-          .limit(12),
-        supabase
-          .from("profiles")
-          .select("id, name, email")
-          .order("name", { ascending: true })
-          .limit(12),
+      const [tasks, projects, team] = await Promise.all([
+        apiClient.get<ApiResponse<{ tasks: SearchTask[] }>>("/tasks"),
+        apiClient.get<ApiResponse<{ projects: SearchProject[] }>>("/projects"),
+        apiClient.get<ApiResponse<{ members: TeamMember[] }>>("/team"),
       ]);
 
-      if (tasks.error) throw tasks.error;
-      if (projects.error) throw projects.error;
-      if (profiles.error) throw profiles.error;
-
       return {
-        tasks: tasks.data ?? [],
-        projects: projects.data ?? [],
-        profiles: profiles.data ?? [],
+        tasks: (tasks.data.data.tasks ?? []).slice(0, 12),
+        projects: (projects.data.data.projects ?? []).slice(0, 12),
+        profiles: (team.data.data.members ?? [])
+          .map(({ id, name, email }) => ({ id, name, email }))
+          .slice(0, 12),
       };
     },
+    staleTime: 30000,
   });
 
   useEffect(() => {
@@ -239,10 +251,10 @@ export function TopBar({ title, crumb }: { title: string; crumb?: string }) {
             ))}
           </CommandGroup>
           <CommandGroup heading="Tasks">
-            {(searchData.data?.tasks ?? []).map((task: any) => (
+            {(searchData.data?.tasks ?? []).map((task) => (
               <CommandItem
                 key={task.id}
-                value={`task ${task.title} ${task.projects?.name ?? ""}`}
+                value={`task ${task.title} ${task.project?.name ?? ""}`}
                 onSelect={() => runCommand(() => navigate({ to: "/tasks" }))}
               >
                 <CheckSquare className="size-4" />
@@ -272,11 +284,11 @@ export function TopBar({ title, crumb }: { title: string; crumb?: string }) {
 
 export function useProfiles() {
   return useQuery({
-    queryKey: ["profiles"],
+    queryKey: ["team-members"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("id, name, email");
-      if (error) throw error;
-      return data;
+      const response = await apiClient.get<ApiResponse<{ members: TeamMember[] }>>("/team");
+      return response.data.data.members.map(({ id, name, email }) => ({ id, name, email }));
     },
+    staleTime: 30000,
   });
 }
