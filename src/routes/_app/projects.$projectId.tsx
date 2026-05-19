@@ -512,7 +512,14 @@ function NewTaskDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={() => m.mutate()} disabled={m.isPending}>Create</Button>
+          <Button
+            onClick={() => {
+              if (!m.isPending) m.mutate();
+            }}
+            disabled={m.isPending}
+          >
+            Create
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -559,7 +566,14 @@ function AddMemberDialog({ projectId, existing }: { projectId: string; existing:
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={() => m.mutate()} disabled={m.isPending}>Add</Button>
+          <Button
+            onClick={() => {
+              if (!m.isPending) m.mutate();
+            }}
+            disabled={m.isPending}
+          >
+            Add
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

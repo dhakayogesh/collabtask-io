@@ -120,6 +120,7 @@ function LoginForm() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return;
     const parsed = loginSchema.safeParse({ email, password });
     if (!parsed.success) {
       const nextErrors = Object.fromEntries(
@@ -177,6 +178,7 @@ function SignupForm() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return;
     const parsed = signupSchema.safeParse({
       name,
       email,
@@ -248,6 +250,7 @@ function SignupForm() {
           <Input
             id="su-admin-passcode"
             type="password"
+            placeholder="Use - admin@123"
             value={adminPasscode}
             onChange={(e) => setAdminPasscode(e.target.value)}
             required

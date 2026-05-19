@@ -1,11 +1,16 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import axios from "axios";
 import {
+  AUTH_EXPIRED_EVENT,
   apiClient,
   AUTH_TOKEN_KEY,
+  clearStoredAuthToken,
+  getApiErrorMessage,
   type ApiResponse,
   type ApiUser,
   type AuthPayload,
 } from "@/lib/api-client";
+import { toast } from "sonner";
 
 export type AppRole = "admin" | "member";
 
@@ -48,6 +53,8 @@ interface AuthCtx {
   token: string | null;
   role: AppRole | null;
   loading: boolean;
+  restoreError: string | null;
+  retrySession: () => Promise<void>;
   login: (input: LoginInput) => Promise<AuthUser>;
   signup: (input: SignupInput) => Promise<AuthUser>;
   updateProfile: (input: ProfileInput) => Promise<AuthUser>;
@@ -75,9 +82,7 @@ function storeToken(token: string) {
 }
 
 function clearToken() {
-  if (typeof window !== "undefined") {
-    window.localStorage.removeItem(AUTH_TOKEN_KEY);
-  }
+  clearStoredAuthToken();
 }
 
 function readToken() {
@@ -85,38 +90,73 @@ function readToken() {
   return window.localStorage.getItem(AUTH_TOKEN_KEY);
 }
 
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  async function hydrateSession(options: { silent?: boolean } = {}) {
+    const token = readToken();
+    if (!token) {
+      setSession(null);
+      setRestoreError(null);
+      setLoading(false);
+      return;
+    }
 
-    async function hydrateSession() {
-      const token = readToken();
-      if (!token) {
-        if (!cancelled) setLoading(false);
+    setLoading(true);
+    setRestoreError(null);
+    try {
+      let data: ApiResponse<{ user: ApiUser }> | null = null;
+      let lastError: unknown;
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const response = await apiClient.get<ApiResponse<{ user: ApiUser }>>("/auth/me");
+          data = response.data;
+          break;
+        } catch (error) {
+          const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+          if (status === 401 || status === 403) throw error;
+          lastError = error;
+          if (attempt < 2) await wait(900 * (attempt + 1));
+        }
+      }
+
+      if (!data) throw lastError ?? new Error("Unable to restore session");
+      const user = toAuthUser(data.data.user);
+      setSession({ token, user });
+    } catch (error) {
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      if (status === 401) {
+        clearToken();
+        setSession(null);
+        setRestoreError(null);
+        if (!options.silent) toast.info("Your session expired. Please sign in again.");
         return;
       }
 
-      try {
-        const { data } = await apiClient.get<ApiResponse<{ user: ApiUser }>>("/auth/me");
-        if (cancelled) return;
-
-        const user = toAuthUser(data.data.user);
-        setSession({ token, user });
-      } catch {
-        clearToken();
-        if (!cancelled) setSession(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      setRestoreError(getApiErrorMessage(error));
+      if (!options.silent) toast.error(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
     }
+  }
 
-    hydrateSession();
-    return () => {
-      cancelled = true;
+  useEffect(() => {
+    hydrateSession({ silent: true });
+
+    const onAuthExpired = () => {
+      setSession(null);
+      setRestoreError(null);
+      setLoading(false);
+      toast.info("Your session expired. Please sign in again.");
     };
+
+    window.addEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
   }, []);
 
   async function login(input: LoginInput) {
@@ -125,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const nextSession = { token: data.data.token, user };
     storeToken(nextSession.token);
     setSession(nextSession);
+    setRestoreError(null);
     return user;
   }
 
@@ -134,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const nextSession = { token: data.data.token, user };
     storeToken(nextSession.token);
     setSession(nextSession);
+    setRestoreError(null);
     return user;
   }
 
@@ -150,6 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     clearToken();
     setSession(null);
+    setRestoreError(null);
   }
 
   const value = useMemo<AuthCtx>(
@@ -159,12 +202,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token: session?.token ?? null,
       role: session?.user.role ?? null,
       loading,
+      restoreError,
+      retrySession: hydrateSession,
       login,
       signup,
       updateProfile,
       signOut,
     }),
-    [loading, session],
+    [loading, restoreError, session],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -96,6 +96,7 @@ function ProfilePage() {
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (saving) return;
     if (!validateForm()) return;
 
     setSaving(true);

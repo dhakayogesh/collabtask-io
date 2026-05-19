@@ -217,7 +217,9 @@ function TeamPage() {
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              onClick={() => deleteMember.mutate(member.id)}
+                              onClick={() => {
+                                if (!deleteMember.isPending) deleteMember.mutate(member.id);
+                              }}
                             >
                               Delete member
                             </AlertDialogAction>

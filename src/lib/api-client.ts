@@ -4,6 +4,7 @@ const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undef
 
 export const API_BASE_URL = (configuredApiBaseUrl || "http://127.0.0.1:5000").replace(/\/$/, "");
 export const AUTH_TOKEN_KEY = "wetask.auth.token";
+export const AUTH_EXPIRED_EVENT = "wetask:auth-expired";
 
 export type ApiResponse<T> = {
   success: boolean;
@@ -36,6 +37,12 @@ export const apiClient = axios.create({
   },
 });
 
+export function clearStoredAuthToken() {
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+
 apiClient.interceptors.request.use((config) => {
   if (typeof window === "undefined") return config;
 
@@ -47,12 +54,38 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError<ApiResponse<unknown>>) => {
+    const status = error.response?.status;
+    const url = error.config?.url ?? "";
+    const isAuthEndpoint = url.includes("/auth/login") || url.includes("/auth/signup");
+
+    if (status === 401 && !isAuthEndpoint) {
+      clearStoredAuthToken();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+      }
+    }
+
+    return Promise.reject(error);
+  },
+);
+
 export function getApiErrorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
     const apiError = error as AxiosError<ApiResponse<unknown>>;
+    if (!apiError.response) {
+      return "Unable to reach the server. Please check your connection and try again.";
+    }
+
+    if (apiError.response.status >= 500) {
+      return "The server is temporarily unavailable. Please try again in a moment.";
+    }
+
     const details = apiError.response?.data?.details;
     const firstDetail = details ? Object.values(details).flat()[0] : undefined;
-    return firstDetail || apiError.response?.data?.message || apiError.message;
+    return firstDetail || apiError.response.data?.message || "Something went wrong. Please try again.";
   }
 
   if (error instanceof Error) return error.message;

@@ -193,7 +193,9 @@ function Projects() {
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={() => deleteProject.mutate(p.id)}
+                            onClick={() => {
+                              if (!deleteProject.isPending) deleteProject.mutate(p.id);
+                            }}
                           >
                             Delete
                           </AlertDialogAction>
@@ -278,7 +280,15 @@ function NewProjectDialog() {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={() => m.mutate()} disabled={m.isPending} className="bg-brand text-brand-foreground hover:bg-brand/90">Create</Button>
+          <Button
+            onClick={() => {
+              if (!m.isPending) m.mutate();
+            }}
+            disabled={m.isPending}
+            className="bg-brand text-brand-foreground hover:bg-brand/90"
+          >
+            Create
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
