@@ -1,5 +1,6 @@
 const prisma = require("../prisma/client");
 const ApiError = require("../utils/apiError");
+const { notifyProjectMemberAdded } = require("./notification.service");
 
 const projectInclude = {
   createdBy: { select: { id: true, name: true, email: true, role: true } },
@@ -44,16 +45,30 @@ const createProject = async ({ name, description }, user) => {
   });
 };
 
-const getProjects = async (user) => {
-  return prisma.project.findMany({
-    where:
-      user.role === "ADMIN"
-        ? undefined
-        : {
-            members: {
-              some: { userId: user.id },
-            },
+const getProjects = async (user, filters = {}) => {
+  const where =
+    user.role === "ADMIN"
+      ? {}
+      : {
+          members: {
+            some: { userId: user.id },
           },
+        };
+
+  if (filters.search) {
+    where.AND = [
+      ...(where.AND || []),
+      {
+        OR: [
+          { name: { contains: filters.search, mode: "insensitive" } },
+          { description: { contains: filters.search, mode: "insensitive" } },
+        ],
+      },
+    ];
+  }
+
+  return prisma.project.findMany({
+    where,
     include: projectInclude,
     orderBy: { createdAt: "desc" },
   });
@@ -107,13 +122,17 @@ const addMember = async (projectId, userId, actor) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new ApiError(404, "User not found");
 
-  return prisma.projectMember.create({
+  const member = await prisma.projectMember.create({
     data: { projectId, userId },
     include: {
       user: { select: { id: true, name: true, email: true, role: true } },
       project: { select: { id: true, name: true } },
     },
   });
+
+  await notifyProjectMemberAdded(member, actor);
+
+  return member;
 };
 
 const removeMember = async (projectId, userId, actor) => {

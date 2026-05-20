@@ -9,9 +9,18 @@ const userSelect = {
   createdAt: true,
 };
 
-const getTeam = async () => {
+const getTeam = async (_user, filters = {}) => {
+  const where = {};
+  if (filters.search) {
+    where.OR = [
+      { name: { contains: filters.search, mode: "insensitive" } },
+      { email: { contains: filters.search, mode: "insensitive" } },
+    ];
+  }
+
   const [users, openTasks, teamTasks] = await Promise.all([
     prisma.user.findMany({
+      where,
       select: userSelect,
       orderBy: [{ role: "asc" }, { createdAt: "asc" }],
     }),

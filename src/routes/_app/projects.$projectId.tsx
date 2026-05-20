@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { TopBar, useProfiles } from "@/components/top-bar";
+import { TaskDetailDrawer } from "@/components/task-detail-drawer";
 import { PriorityBadge } from "@/components/badges";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient, getApiErrorMessage, type ApiResponse } from "@/lib/api-client";
@@ -122,6 +123,7 @@ function ProjectDetail() {
   const isAdmin = role === "admin";
   const qc = useQueryClient();
   const teamMembers = useTeamMembers();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const cachedProject = qc
     .getQueryData<Array<{ id: string; name: string; description: string | null }>>(["projects"])
     ?.find((p) => p.id === projectId);
@@ -159,6 +161,7 @@ function ProjectDetail() {
       qc.invalidateQueries({ queryKey: ["tasks-page"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
     },
     onError: (e: unknown) => toast.error(getApiErrorMessage(e)),
   });
@@ -232,6 +235,7 @@ function ProjectDetail() {
                   items.map((t: any) => (
                     <div
                       key={t.id}
+                      onClick={() => setSelectedTaskId(t.id)}
                       className="group p-3.5 bg-card ring-1 ring-border rounded-lg space-y-3 hover:ring-white/15 hover:-translate-y-0.5 transition-all shadow-elev hairline cursor-pointer"
                     >
                       <div className="text-sm font-medium leading-snug">{t.title}</div>
@@ -268,7 +272,12 @@ function ProjectDetail() {
                             value={t.status}
                             onValueChange={(v) => updateStatus.mutate({ id: t.id, status: v })}
                           >
-                            <SelectTrigger className="h-6 text-[10px] w-24 bg-white/[0.03]"><SelectValue /></SelectTrigger>
+                            <SelectTrigger
+                              className="h-6 text-[10px] w-24 bg-white/[0.03]"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="todo">Todo</SelectItem>
                               <SelectItem value="in_progress">In Progress</SelectItem>
@@ -314,6 +323,13 @@ function ProjectDetail() {
           </>
         )}
       </div>
+      <TaskDetailDrawer
+        taskId={selectedTaskId}
+        open={Boolean(selectedTaskId)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setSelectedTaskId(null);
+        }}
+      />
     </>
   );
 }
@@ -450,6 +466,7 @@ function NewTaskDialog({
       qc.invalidateQueries({ queryKey: ["tasks-page"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
       toast.success("Task created");
       setOpen(false); setTitle(""); setDesc(""); setDue(""); setAssignee("UNASSIGNED");
     },
@@ -542,6 +559,7 @@ function AddMemberDialog({ projectId, existing }: { projectId: string; existing:
       qc.invalidateQueries({ queryKey: ["project", projectId] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
       toast.success("Member added"); setOpen(false); setUserId(undefined);
     },
     onError: (e: unknown) => toast.error(getApiErrorMessage(e)),

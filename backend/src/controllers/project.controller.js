@@ -8,7 +8,7 @@ const createProject = asyncHandler(async (req, res) => {
 });
 
 const getProjects = asyncHandler(async (req, res) => {
-  const projects = await projectService.getProjects(req.user);
+  const projects = await projectService.getProjects(req.user, req.query);
   sendSuccess(res, { projects }, "Projects retrieved", 200, { count: projects.length });
 });
 

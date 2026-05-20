@@ -3,7 +3,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const { sendSuccess } = require("../utils/response");
 
 const getTeam = asyncHandler(async (req, res) => {
-  const members = await teamService.getTeam(req.user);
+  const members = await teamService.getTeam(req.user, req.query);
   sendSuccess(res, { members }, "Team retrieved", 200, { count: members.length });
 });
 

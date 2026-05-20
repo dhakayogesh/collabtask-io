@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { TopBar } from "@/components/top-bar";
 import { PriorityBadge } from "@/components/badges";
 import { apiClient, getApiErrorMessage, type ApiResponse } from "@/lib/api-client";
+import { useTeamMembers } from "@/lib/team-members";
+import { TaskDetailDrawer } from "@/components/task-detail-drawer";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -23,6 +26,11 @@ type ApiTask = {
   dueDate: string | null;
   project?: { id: string; name: string } | null;
   assignedTo?: { id: string; name: string | null; email: string } | null;
+};
+
+type ProjectSummary = {
+  id: string;
+  name: string;
 };
 
 const statusToApi = {
@@ -43,18 +51,53 @@ const priorityFromApi = {
   HIGH: "high",
 } as const;
 
+const priorityToApi = {
+  low: "LOW",
+  medium: "MEDIUM",
+  high: "HIGH",
+} as const;
+
 function TasksPage() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("all");
+  const [priority, setPriority] = useState<string>("all");
+  const [assignee, setAssignee] = useState<string>("all");
+  const [projectId, setProjectId] = useState<string>("all");
+  const [due, setDue] = useState<string>("all");
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const deferredSearch = useDeferredValue(q);
   const qc = useQueryClient();
+  const teamMembers = useTeamMembers();
+  const projects = useQuery({
+    queryKey: ["projects", "task-filters"],
+    queryFn: async () => {
+      const response = await apiClient.get<ApiResponse<{ projects: ProjectSummary[] }>>("/projects");
+      return response.data.data.projects;
+    },
+    staleTime: 30000,
+    placeholderData: (previous) => previous,
+  });
 
   const tasks = useQuery({
-    queryKey: ["tasks-page", q, status],
+    queryKey: ["tasks-page", deferredSearch, status, priority, assignee, projectId, due],
     queryFn: async () => {
+      const assigneeParams =
+        assignee === "team"
+          ? { assignmentType: "TEAM" }
+          : assignee === "unassigned"
+            ? { assignmentType: "UNASSIGNED" }
+            : assignee.startsWith("user:")
+              ? { assignedToId: assignee.slice(5) }
+              : {};
+
       const response = await apiClient.get<ApiResponse<{ tasks: ApiTask[] }>>("/tasks", {
         params: {
-          search: q.trim() || undefined,
+          search: deferredSearch.trim() || undefined,
           status: status === "all" ? undefined : statusToApi[status as keyof typeof statusToApi],
+          priority: priority === "all" ? undefined : priorityToApi[priority as keyof typeof priorityToApi],
+          projectId: projectId === "all" ? undefined : projectId,
+          due: due === "all" ? undefined : due,
+          ...assigneeParams,
         },
       });
       return response.data.data.tasks;
@@ -91,11 +134,23 @@ function TasksPage() {
       qc.invalidateQueries({ queryKey: ["tasks-page"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 
   const filtered = tasks.data ?? [];
   const isInitialLoading = tasks.isLoading && !tasks.data;
+  const hasActiveFilters =
+    q.trim() !== "" || status !== "all" || priority !== "all" || assignee !== "all" || projectId !== "all" || due !== "all";
+
+  const clearFilters = () => {
+    setQ("");
+    setStatus("all");
+    setPriority("all");
+    setAssignee("all");
+    setProjectId("all");
+    setDue("all");
+  };
 
   return (
     <>
@@ -111,8 +166,8 @@ function TasksPage() {
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative max-w-sm flex-1">
+        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_repeat(5,minmax(140px,180px))_auto]">
+          <div className="relative min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
               placeholder="Search tasks..."
@@ -122,7 +177,7 @@ function TasksPage() {
             />
           </div>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="todo">Todo</SelectItem>
@@ -130,11 +185,64 @@ function TasksPage() {
               <SelectItem value="done">Done</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={priority} onValueChange={setPriority}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All priorities</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={assignee} onValueChange={setAssignee}>
+            <SelectTrigger><SelectValue placeholder="Assignee" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All assignees</SelectItem>
+              <SelectItem value="unassigned">Not assigned</SelectItem>
+              <SelectItem value="team">Whole team</SelectItem>
+              {(teamMembers.data ?? []).map((member) => (
+                <SelectItem key={member.id} value={`user:${member.id}`}>
+                  {member.name || member.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={projectId} onValueChange={setProjectId}>
+            <SelectTrigger><SelectValue placeholder="Project" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All projects</SelectItem>
+              {(projects.data ?? []).map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={due} onValueChange={setDue}>
+            <SelectTrigger><SelectValue placeholder="Due date" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any due date</SelectItem>
+              <SelectItem value="overdue">Overdue</SelectItem>
+              <SelectItem value="today">Due today</SelectItem>
+              <SelectItem value="week">Due this week</SelectItem>
+              <SelectItem value="no_due">No due date</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 px-3"
+            disabled={!hasActiveFilters}
+            onClick={clearFilters}
+          >
+            <X className="size-3.5 mr-1.5" />
+            Clear
+          </Button>
         </div>
 
         <div className="ring-1 ring-border rounded-xl bg-card/60 overflow-hidden shadow-elev">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm min-w-[860px]">
               <thead>
                 <tr className="border-b border-border bg-white/[0.02]">
                   <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Task</th>
@@ -155,7 +263,11 @@ function TasksPage() {
                     </td>
                   </tr>
                 ) : filtered.map((t) => (
-                  <tr key={t.id} className="hover:bg-white/[0.03] transition-colors">
+                  <tr
+                    key={t.id}
+                    className="hover:bg-white/[0.03] transition-colors cursor-pointer"
+                    onClick={() => setSelectedTaskId(t.id)}
+                  >
                     <td className="px-4 py-3 font-medium">{t.title}</td>
                     <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{t.project?.name ?? "—"}</td>
                     <td className="px-4 py-3">
@@ -181,11 +293,17 @@ function TasksPage() {
                     <td className="px-4 py-3">
                       <Select
                         value={statusFromApi[t.status]}
+                        disabled={updateStatus.isPending}
                         onValueChange={(nextStatus) =>
                           updateStatus.mutate({ id: t.id, nextStatus: nextStatus as keyof typeof statusToApi })
                         }
                       >
-                        <SelectTrigger className="h-8 w-32 bg-white/[0.03]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger
+                          className="h-8 w-32 bg-white/[0.03]"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="todo">Todo</SelectItem>
                           <SelectItem value="in_progress">In Progress</SelectItem>
@@ -210,6 +328,13 @@ function TasksPage() {
           </div>
         </div>
       </div>
+      <TaskDetailDrawer
+        taskId={selectedTaskId}
+        open={Boolean(selectedTaskId)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setSelectedTaskId(null);
+        }}
+      />
     </>
   );
 }

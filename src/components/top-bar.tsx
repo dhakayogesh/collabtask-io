@@ -1,9 +1,17 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useDeferredValue, useState, useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Search, Bell, Menu, LogOut, Plus, FolderKanban, CheckSquare, Users, UserRound } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetHeader } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   CommandDialog,
   CommandEmpty,
@@ -17,8 +25,8 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { navItems } from "./nav-items";
-import { toast } from "sonner";
 import { apiClient, type ApiResponse } from "@/lib/api-client";
+import { formatDistanceToNow } from "date-fns";
 
 type SearchProject = {
   id: string;
@@ -45,20 +53,43 @@ type TeamMember = SearchProfile & {
   role: "ADMIN" | "MEMBER";
 };
 
+type AppNotification = {
+  id: string;
+  type: "TASK_ASSIGNED" | "TASK_DUE_SOON" | "TASK_STATUS_CHANGED" | "PROJECT_MEMBER_ADDED";
+  title: string;
+  message: string;
+  read: boolean;
+  data?: {
+    taskId?: string;
+    projectId?: string;
+  } | null;
+  createdAt: string;
+};
+
 export function TopBar({ title, crumb }: { title: string; crumb?: string }) {
   const [open, setOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
   const [isMac, setIsMac] = useState(false);
+  const deferredSearchValue = useDeferredValue(searchValue);
   const { user, role, signOut } = useAuth();
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const searchData = useQuery({
-    queryKey: ["topbar-search"],
+    queryKey: ["topbar-search", deferredSearchValue],
+    enabled: searchOpen,
     queryFn: async () => {
+      const search = deferredSearchValue.trim() || undefined;
       const [tasks, projects, team] = await Promise.all([
-        apiClient.get<ApiResponse<{ tasks: SearchTask[] }>>("/tasks"),
-        apiClient.get<ApiResponse<{ projects: SearchProject[] }>>("/projects"),
-        apiClient.get<ApiResponse<{ members: TeamMember[] }>>("/team"),
+        apiClient.get<ApiResponse<{ tasks: SearchTask[] }>>("/tasks", {
+          params: { search },
+        }),
+        apiClient.get<ApiResponse<{ projects: SearchProject[] }>>("/projects", {
+          params: { search },
+        }),
+        apiClient.get<ApiResponse<{ members: TeamMember[] }>>("/team", {
+          params: { search },
+        }),
       ]);
 
       return {
@@ -70,6 +101,7 @@ export function TopBar({ title, crumb }: { title: string; crumb?: string }) {
       };
     },
     staleTime: 30000,
+    placeholderData: (previous) => previous,
   });
 
   useEffect(() => {
@@ -181,15 +213,7 @@ export function TopBar({ title, crumb }: { title: string; crumb?: string }) {
         >
           <Search className="size-4" />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-9 text-muted-foreground hover:text-foreground"
-          title="Notifications"
-          onClick={() => toast.info("No new notifications")}
-        >
-          <Bell className="size-4" />
-        </Button>
+        <NotificationsBell />
         <Button
           size="sm"
           onClick={() => navigate({ to: "/projects" })}
@@ -206,7 +230,11 @@ export function TopBar({ title, crumb }: { title: string; crumb?: string }) {
         </Button>
       </div>
       <CommandDialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <CommandInput placeholder="Search tasks, projects, or people..." />
+        <CommandInput
+          placeholder="Search tasks, projects, or people..."
+          value={searchValue}
+          onValueChange={setSearchValue}
+        />
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
           <CommandGroup heading="Pages">
@@ -279,6 +307,142 @@ export function TopBar({ title, crumb }: { title: string; crumb?: string }) {
         </CommandList>
       </CommandDialog>
     </header>
+  );
+}
+
+function NotificationsBell() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const notifications = useQuery({
+    queryKey: ["notifications"],
+    enabled: Boolean(user),
+    queryFn: async () => {
+      const response = await apiClient.get<ApiResponse<{
+        notifications: AppNotification[];
+        unreadCount: number;
+      }>>("/notifications");
+      return response.data.data;
+    },
+    refetchInterval: 30000,
+    staleTime: 15000,
+    placeholderData: (previous) => previous,
+  });
+
+  const markRead = useMutation({
+    mutationFn: async (notificationId: string) => {
+      await apiClient.patch<ApiResponse<{ notification: AppNotification }>>(`/notifications/${notificationId}/read`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: async () => {
+      await apiClient.patch<ApiResponse<{ notifications: AppNotification[]; unreadCount: number }>>("/notifications/read-all");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+
+  const items = notifications.data?.notifications ?? [];
+  const unreadCount = notifications.data?.unreadCount ?? 0;
+
+  const openNotification = (notification: AppNotification) => {
+    if (!notification.read) markRead.mutate(notification.id);
+    if (notification.data?.projectId) {
+      navigate({ to: "/projects/$projectId", params: { projectId: notification.data.projectId } });
+      return;
+    }
+    navigate({ to: "/tasks" });
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative size-9 text-muted-foreground hover:text-foreground"
+          title="Notifications"
+        >
+          <Bell className="size-4" />
+          {unreadCount > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 min-w-4 h-4 px-1 rounded-full bg-brand text-[9px] font-semibold text-brand-foreground grid place-items-center ring-2 ring-background">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80 p-0">
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+          <DropdownMenuLabel className="p-0 text-sm">Notifications</DropdownMenuLabel>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+            disabled={unreadCount === 0 || markAllRead.isPending}
+            onClick={(event) => {
+              event.preventDefault();
+              markAllRead.mutate();
+            }}
+          >
+            Mark all read
+          </Button>
+        </div>
+        <DropdownMenuSeparator className="m-0" />
+        <div className="max-h-96 overflow-y-auto p-1">
+          {notifications.isLoading && !notifications.data ? (
+            Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="p-3 rounded-md animate-pulse">
+                <div className="h-3 w-32 rounded bg-white/[0.06]" />
+                <div className="mt-2 h-3 w-full rounded bg-white/[0.06]" />
+                <div className="mt-2 h-2 w-20 rounded bg-white/[0.06]" />
+              </div>
+            ))
+          ) : notifications.isError ? (
+            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+              Could not load notifications.
+            </div>
+          ) : items.length === 0 ? (
+            <div className="px-3 py-8 text-center">
+              <div className="mx-auto size-9 rounded-full bg-white/[0.04] grid place-items-center mb-2">
+                <Bell className="size-4 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium">No notifications</p>
+              <p className="text-xs text-muted-foreground mt-1">Task and project updates will appear here.</p>
+            </div>
+          ) : (
+            items.map((notification) => (
+              <DropdownMenuItem
+                key={notification.id}
+                className="items-start gap-3 p-3 cursor-pointer"
+                onSelect={() => openNotification(notification)}
+              >
+                <span
+                  className={cn(
+                    "mt-1 size-2 rounded-full shrink-0",
+                    notification.read ? "bg-white/15" : "bg-brand shadow-[0_0_10px_var(--brand)]",
+                  )}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium truncate">{notification.title}</span>
+                  <span className="block text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                    {notification.message}
+                  </span>
+                  <span className="block text-[10px] text-muted-foreground font-mono mt-1.5">
+                    {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                  </span>
+                </span>
+              </DropdownMenuItem>
+            ))
+          )}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

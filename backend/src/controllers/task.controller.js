@@ -12,6 +12,11 @@ const getTasks = asyncHandler(async (req, res) => {
   sendSuccess(res, { tasks }, "Tasks retrieved", 200, { count: tasks.length });
 });
 
+const getTaskById = asyncHandler(async (req, res) => {
+  const task = await taskService.getTaskById(req.params.taskId, req.user);
+  sendSuccess(res, { task }, "Task retrieved");
+});
+
 const updateTask = asyncHandler(async (req, res) => {
   const task = await taskService.updateTask(req.params.taskId, req.body, req.user);
   sendSuccess(res, { task }, "Task updated");
@@ -37,11 +42,18 @@ const getOverdueTasks = asyncHandler(async (req, res) => {
   sendSuccess(res, { tasks }, "Overdue tasks retrieved", 200, { count: tasks.length });
 });
 
+const addComment = asyncHandler(async (req, res) => {
+  const comment = await taskService.addComment(req.params.taskId, req.body.content, req.user);
+  sendSuccess(res, { comment }, "Comment added", 201);
+});
+
 module.exports = {
+  addComment,
   assignTask,
   changeTaskStatus,
   createTask,
   deleteTask,
+  getTaskById,
   getTasks,
   getOverdueTasks,
   updateTask,

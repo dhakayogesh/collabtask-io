@@ -39,14 +39,20 @@ const statusSchema = {
   status: ["required", ["enum", ["TODO", "IN_PROGRESS", "DONE"]]],
 };
 
+const commentSchema = {
+  content: ["required", "string", ["min", 1], ["max", 2000]],
+};
+
 router.use(authenticate);
 
 router.get("/", taskController.getTasks);
 router.get("/overdue", taskController.getOverdueTasks);
+router.get("/:taskId", validate(taskIdParam, "params"), taskController.getTaskById);
 router.post("/", validate(createTaskSchema), taskController.createTask);
 router.patch("/:taskId", validate(taskIdParam, "params"), validate(updateTaskSchema), taskController.updateTask);
 router.delete("/:taskId", validate(taskIdParam, "params"), taskController.deleteTask);
 router.patch("/:taskId/assign", validate(taskIdParam, "params"), validate(assignTaskSchema), taskController.assignTask);
 router.patch("/:taskId/status", validate(taskIdParam, "params"), validate(statusSchema), taskController.changeTaskStatus);
+router.post("/:taskId/comments", validate(taskIdParam, "params"), validate(commentSchema), taskController.addComment);
 
 module.exports = router;
